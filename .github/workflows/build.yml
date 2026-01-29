@@ -1,0 +1,55 @@
+name: release-build
+
+on:
+  push:
+    branches:
+      - main
+    # tags:
+    #   - 'v*'
+
+jobs:
+  build-macos:
+    name: Build (${{ matrix.goos }}-${{ matrix.goarch }})
+    runs-on: ${{ matrix.runner }}
+
+    strategy:
+      matrix:
+        include:
+          # Intel macOS
+          - goos: darwin
+            goarch: amd64
+            runner: macos-latest-large
+          # Apple Silicon
+          - goos: darwin
+            goarch: arm64
+            runner: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.25'
+
+      - name: Build
+        env:
+          CGO_CFLAGS: "-I/usr/local/include -I/usr/local/include/luajit-2.1"
+          CGO_LDFLAGS: "/usr/local/lib/libyyjson.a /usr/local/lib/libluajit-5.1.a -lm"
+        run: |
+          git clone https://github.com/ibireme/yyjson.git
+          mkdir yyjson.build
+          cd yyjson.build
+          cmake -B yyjson.build -S yyjson
+          make -C yyjson.build install
+          git clone https://luajit.org/git/luajit.git
+          make -C luajit install
+          mkdir -p dist
+          go build -trimpath -o dist/ktt-${{ matrix.goos }}.${{ matrix.goarch }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: mytool_${{ matrix.goos }}.${{ matrix.goarch }}
+          path: dist/*
