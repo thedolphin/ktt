@@ -46,24 +46,54 @@ jobs:
 
     strategy:
       matrix:
-        platform:
-          - "linux/amd64"
-          - "linux/arm64"
         include:
           - name: debian12
             image: 'debian:12'
+            platform: 'amd64'
+
+          - name: debian12
+            image: 'debian:12'
+            platform: 'arm64'
+
           - name: debian13
             image: 'debian:13'
-          - name: ubuntu24
-            image: 'ubuntu:24.04'
+            platform: 'amd64'
+
+          - name: debian13
+            image: 'debian:13'
+            platform: 'arm64'
+
           - name: ubuntu22
             image: 'ubuntu:22.04'
+            platform: 'amd64'
+
+          - name: ubuntu22
+            image: 'ubuntu:22.04'
+            platform: 'arm64'
+
           - name: rhel10
             image: 'redhat/ubi10:latest'
+            platform: 'amd64'
+
+          - name: rhel10
+            image: 'redhat/ubi10:latest'
+            platform: 'arm64'
+
           - name: rhel9
             image: 'redhat/ubi9:latest'
+            platform: 'amd64'
+
+          - name: rhel9
+            image: 'redhat/ubi9:latest'
+            platform: 'arm64'
+
           - name: rhel8
             image: 'redhat/ubi8:latest'
+            platform: 'amd64'
+
+          - name: rhel8
+            image: 'redhat/ubi8:latest'
+            platform: 'arm64'
 
     steps:
       - name: Checkout
@@ -80,7 +110,7 @@ jobs:
         with:
           context: .
           file: ./build/package/Dockerfile.buildapp 
-          platforms: ${{ matrix.platform }}
+          platforms: linux/${{ matrix.platform }}
           outputs: type=local,dest=./dist
           provenance: false
 
