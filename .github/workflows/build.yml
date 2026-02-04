@@ -36,7 +36,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v6
         with:
-          name: ktt_macos_${{ matrix.goarch }}
+          name: ktt_macos_${{ matrix.goarch }}.release
           path: 'dist/*'
           retention-days: 1
 
@@ -46,6 +46,9 @@ jobs:
 
     strategy:
       matrix:
+        platform:
+          - "linux/amd64"
+          - "linux/arm64"
         include:
           - name: debian12
             image: 'debian:12'
@@ -77,13 +80,14 @@ jobs:
         with:
           context: .
           file: ./build/package/Dockerfile.buildapp 
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.platform }}
           outputs: type=local,dest=./dist
+          provenance: false
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v6
         with:
-          name: ktt_linux_${{ matrix.name }}
+          name: ktt_linux_${{ matrix.name }}_${{ matrix.platform }}.release
           path: 'dist/*'
           retention-days: 1
 
@@ -98,12 +102,13 @@ jobs:
       - name: Download all artifacts
         uses: actions/download-artifact@v7
         with:
+          pattern: '*.release'
           path: dist
           merge-multiple: true
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/**
+          files: dist/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
