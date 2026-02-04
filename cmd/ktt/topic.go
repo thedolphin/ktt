@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
+	"os"
 
 	"github.com/IBM/sarama"
 	"golang.org/x/sync/errgroup"
@@ -16,13 +16,13 @@ type TopicProcessor struct {
 	cg             string // Consumer Group name
 	om             sarama.OffsetManager
 	consumer       sarama.Consumer
-	producer       sarama.SyncProducer
+	output         *Output
 }
 
 func (c *TopicProcessor) Run(ctx context.Context) error {
 
-	log.Print("starting consumer")
-	defer log.Print("consumer stopped")
+	fmt.Fprintln(os.Stderr, "starting consumer")
+	defer fmt.Fprintln(os.Stderr, "consumer stopped")
 
 	partitions, err := c.consumerClient.Partitions(c.topic)
 	if err != nil {
@@ -36,11 +36,11 @@ func (c *TopicProcessor) Run(ctx context.Context) error {
 	defer c.consumer.Close()
 
 	if c.producerClient != nil {
-		c.producer, err = sarama.NewSyncProducerFromClient(c.producerClient)
+		c.output.producer, err = sarama.NewSyncProducerFromClient(c.producerClient)
 		if err != nil {
 			return fmt.Errorf("error initializing producer: %w", err)
 		}
-		defer c.producer.Close()
+		defer c.output.producer.Close()
 	}
 
 	if len(c.cg) > 0 {
@@ -70,16 +70,17 @@ func (c *TopicProcessor) Run(ctx context.Context) error {
 		})
 	}
 
-	log.Print("before wait")
+	fmt.Fprintln(os.Stderr, "waiting partition processing goroutines to finish")
 	return errGrp.Wait()
 }
 
-func NewTopicProcessor(consumerClient, producerClient sarama.Client, topic string, cg string) *TopicProcessor {
+func NewTopicProcessor(consumerClient, producerClient sarama.Client, topic string, cg string, output *Output) *TopicProcessor {
 
 	return &TopicProcessor{
 		consumerClient: consumerClient,
 		producerClient: producerClient,
 		topic:          topic,
 		cg:             cg,
+		output:         output,
 	}
 }

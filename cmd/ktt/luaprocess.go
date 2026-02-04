@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/IBM/sarama"
 	"github.com/thedolphin/luarunner"
@@ -26,28 +28,29 @@ func luaInit() (*luarunner.LuaRunner, error) {
 
 	lua.StrictRead()
 
-	filter := `function __process__(msg) ` +
+	filter := &strings.Builder{}
+
+	filter.WriteString(`function __process__(msg) ` +
 		`local __pass__, __stop__, __commit__ = false, false, false ` +
 		`local function pass() __pass__ = true end ` +
 		`local function stop() __stop__ = true end ` +
-		`local function commit() __commit__ = true end`
+		`local function commit() __commit__ = true end`)
 
 	if !config.raw {
-		filter += ` msg.Value = yyjson.load_mut(msg.Value)`
+		filter.WriteString(` msg.Value = yyjson.load_mut(msg.Value)`)
 	}
 
-	filter += "\n" + config.filter + "\n"
+	filter.WriteByte('\n')
+	filter.WriteString(config.filter)
+	filter.WriteByte('\n')
 
-	if config.write {
-		if !config.raw {
-			filter += "msg.Value = tostring(msg.Value) "
-		}
-		filter += "return msg, __pass__, __stop__, __commit__ end"
-	} else {
-		filter += "return __pass__, __stop__, __commit__ end"
+	if !config.raw {
+		filter.WriteString("msg.Value = tostring(msg.Value) ")
 	}
 
-	err = lua.Load(filter)
+	filter.WriteString("return msg, __pass__, __stop__, __commit__ end")
+
+	err = lua.Load(filter.String())
 	if err != nil {
 		lua.Close()
 		return nil, err
@@ -68,7 +71,7 @@ func luaProcess(
 	lua *luarunner.LuaRunner,
 	msg *sarama.ConsumerMessage,
 ) (
-	uint8, *sarama.ProducerMessage, error,
+	uint8, *sarama.ConsumerMessage, error,
 ) {
 
 	headers := make(map[string]any, len(msg.Headers))
@@ -78,7 +81,7 @@ func luaProcess(
 
 	lua.GetGlobal("__process__")
 	lua.Push(map[string]any{
-		"Timestamp": msg.Timestamp,
+		"Timestamp": msg.Timestamp.Unix(), // Lua uses Unix Epoch
 		"Topic":     msg.Topic,
 		"Partition": msg.Partition,
 		"Key":       msg.Key,
@@ -101,46 +104,45 @@ func luaProcess(
 		}
 	}
 
-	var retMsg *sarama.ProducerMessage
-	if config.write {
+	var retMsg *sarama.ConsumerMessage
 
-		vAny, err := lua.Pop()
-		if err != nil {
-			return 0, nil, fmt.Errorf("error getting message return value: %w", err)
-		}
+	vAny, err := lua.Pop()
+	if err != nil {
+		return 0, nil, fmt.Errorf("error getting message return value: %w", err)
+	}
 
-		ok := true
-		v := As[map[string]any](vAny, &ok)
-		if !ok {
-			return 0, nil, fmt.Errorf("error parsing message: cannot cast to map[string]any, got %T", vAny)
-		}
+	ok := true
+	v := As[map[string]any](vAny, &ok)
+	if !ok {
+		return 0, nil, fmt.Errorf("error parsing message: cannot cast to map[string]any, got %T", vAny)
+	}
 
-		retHeaders := As[map[string]any](v["Headers"], &ok)
-		if !ok {
-			return 0, nil, fmt.Errorf("error parsing message: cannot cast Headers field to map[string]any, got %T", v["Headers"])
-		}
+	retHeaders := As[map[string]any](v["Headers"], &ok)
+	if !ok {
+		return 0, nil, fmt.Errorf("error parsing message: cannot cast Headers field to map[string]any, got %T", v["Headers"])
+	}
 
-		retMsg = &sarama.ProducerMessage{
-			Topic:     As[string](v["Topic"], &ok),
-			Partition: int32(As[float64](v["Partition"], &ok)),
-			Key:       sarama.StringEncoder(As[string](v["Key"], &ok)),
-			Value:     sarama.StringEncoder(As[string](v["Value"], &ok)),
-			Headers:   make([]sarama.RecordHeader, len(retHeaders)),
-		}
+	retMsg = &sarama.ConsumerMessage{
+		Timestamp: time.Unix(int64(As[float64](v["Timestamp"], &ok)), 0),
+		Topic:     As[string](v["Topic"], &ok),
+		Partition: int32(As[float64](v["Partition"], &ok)),
+		Key:       []byte(As[string](v["Key"], &ok)),
+		Value:     []byte(As[string](v["Value"], &ok)),
+		Headers:   make([]*sarama.RecordHeader, len(retHeaders)),
+	}
 
-		if !ok {
-			return 0, nil, fmt.Errorf("error parsing message: cannot cast one of Msg fields: Topic[string], Partition[float64], Key[string], Value[string]")
-		}
+	if !ok {
+		return 0, nil, fmt.Errorf("error parsing message: cannot cast one of Msg fields: Timestamp[number], Topic[string], Partition[number], Key[string], Value[string]")
+	}
 
-		for headerKey, headerValue := range retHeaders {
-			retMsg.Headers = append(retMsg.Headers, sarama.RecordHeader{
-				Key:   []byte(headerKey),
-				Value: []byte(As[string](headerValue, &ok))})
-		}
+	for headerKey, headerValue := range retHeaders {
+		retMsg.Headers = append(retMsg.Headers, &sarama.RecordHeader{
+			Key:   []byte(headerKey),
+			Value: []byte(As[string](headerValue, &ok))})
+	}
 
-		if !ok {
-			return 0, nil, fmt.Errorf("error parsing msg: cannot cast Headers values to string")
-		}
+	if !ok {
+		return 0, nil, fmt.Errorf("error parsing msg: cannot cast Headers values to string")
 	}
 
 	return flags, retMsg, nil

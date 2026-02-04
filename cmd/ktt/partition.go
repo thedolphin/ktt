@@ -1,11 +1,9 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"log"
+	"os"
 
 	"github.com/IBM/sarama"
 	"github.com/thedolphin/luarunner"
@@ -17,7 +15,7 @@ type PartitionProcessor struct {
 	lua       *luarunner.LuaRunner
 	pom       sarama.PartitionOffsetManager
 	pc        sarama.PartitionConsumer
-	producer  sarama.SyncProducer
+	output    *Output
 }
 
 func (c *TopicProcessor) NewPartitionProcessor(partition int32) (*PartitionProcessor, error) {
@@ -25,7 +23,7 @@ func (c *TopicProcessor) NewPartitionProcessor(partition int32) (*PartitionProce
 	var err error
 	pp := &PartitionProcessor{
 		partition: partition,
-		producer:  c.producer,
+		output:    c.output,
 	}
 
 	pp.lua, err = luaInit()
@@ -71,15 +69,15 @@ func (c *TopicProcessor) NewPartitionProcessor(partition int32) (*PartitionProce
 		return nil, fmt.Errorf("error instatiating partition consumer: %w", err)
 	}
 
-	log.Printf("got offsets for partition #%d: %d->%d", partition, oldest, pp.newest)
+	fmt.Fprintf(os.Stderr, "got offsets for partition #%d: %d->%d\n", partition, oldest, pp.newest)
 
 	return pp, nil
 }
 
 func (pp *PartitionProcessor) Process(ctx context.Context) error {
 
-	log.Printf("starting partition %d consumer", pp.partition)
-	defer log.Printf("stopping partition %d consumer", pp.partition)
+	fmt.Fprintf(os.Stderr, "starting partition %d consumer\n", pp.partition)
+	defer fmt.Fprintf(os.Stderr, "stopping partition %d consumer\n", pp.partition)
 
 	if pp.pom != nil {
 		defer pp.pom.AsyncClose()
@@ -90,6 +88,9 @@ func (pp *PartitionProcessor) Process(ctx context.Context) error {
 	run := true
 	for run {
 		select {
+		case <-ctx.Done():
+			run = false
+
 		case msg, ok := <-pp.pc.Messages():
 			if !ok {
 				return nil
@@ -99,16 +100,20 @@ func (pp *PartitionProcessor) Process(ctx context.Context) error {
 				run = false
 			}
 
-			var (
-				sendMsg *sarama.ProducerMessage
-				flags   uint8
-				err     error
-			)
+			var sendMsg *sarama.ConsumerMessage
 
-			if pp.lua != nil {
+			if pp.lua == nil {
 
-				flags, sendMsg, err = luaProcess(pp.lua, msg)
-				if err != nil {
+				sendMsg = msg
+
+			} else {
+
+				var (
+					flags uint8
+					err   error
+				)
+
+				if flags, sendMsg, err = luaProcess(pp.lua, msg); err != nil {
 					return fmt.Errorf("error processing message: %w", err)
 				}
 
@@ -121,28 +126,11 @@ func (pp *PartitionProcessor) Process(ctx context.Context) error {
 				if flags&LuaResultPass == 0 {
 					continue
 				}
+
 			}
 
-			log.Printf("part: %d, ofs: %d", msg.Partition, msg.Offset)
+			pp.output.Write(sendMsg)
 
-			if config.print {
-				if config.raw {
-					fmt.Print(string(msg.Value))
-				} else {
-					var pretty bytes.Buffer
-					if err := json.Indent(&pretty, msg.Value, "", "  "); err != nil {
-						return fmt.Errorf("cannot format json message: %w", err)
-					}
-					fmt.Print(pretty.String())
-				}
-			}
-
-			if pp.producer != nil {
-				pp.producer.SendMessage(sendMsg)
-			}
-
-		case <-ctx.Done():
-			run = false
 		}
 	}
 

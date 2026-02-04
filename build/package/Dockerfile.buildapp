@@ -1,0 +1,13 @@
+ARG BASE_IMAGE=debian:12
+FROM $BASE_IMAGE AS build
+
+WORKDIR /work
+
+COPY . .
+
+ARG APP_VERSION=dev
+ENV APP_VERSION=$APP_VERSION
+RUN scripts/build.sh
+
+FROM scratch
+COPY --from=build /work/dist/ktt* /

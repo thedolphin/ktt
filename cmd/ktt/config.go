@@ -24,16 +24,12 @@ var config struct {
 	dstClusterName    string
 	dstClusterBrokers []string
 	print             bool
+	prettyPrint       bool
 	write             bool
 	raw               bool
 }
 
 func initConfig() (err error) {
-
-	// flag.Usage = func() {
-	// 	fmt.Fprintf(flag.CommandLine.Output(), "Usage of %s:\n", os.Args[0])
-	// 	flag.PrintDefaults()
-	// }
 
 	flag.StringVar(&config.kafConfigFile, "c", "", "kaf config file location, default $HOME/.kaf/config")
 	flag.StringVar(&config.filter, "e", "", "lua script for filtering and mangling")
@@ -42,14 +38,22 @@ func initConfig() (err error) {
 	flag.StringVar(&config.dstClusterName, "d", "", "destination kafka cluster name, default active cluster")
 	flag.StringVar(&config.srcTopic, "t", "", "source topic name")
 	flag.StringVar(&config.srcGroup, "g", "", "consumer group name")
-	flag.BoolVar(&config.write, "w", false, "send found and modified messages to kafka")
-	flag.BoolVar(&config.print, "p", false, "print found original messages")
+	flag.BoolVar(&config.write, "w", false, "send messages to kafka")
+	flag.BoolVar(&config.print, "p", false, "print messages")
+	flag.BoolVar(&config.prettyPrint, "P", false, "pretty print JSON messages")
 	flag.BoolVar(&config.raw, "r", false, "pass raw message value to filter, disable JSON parsing")
 
 	flag.Parse()
 
+	if config.prettyPrint {
+		if config.raw {
+			return errors.New(`raw ("-r") and pretty print ("-P") are mutually exclusive`)
+		}
+		config.print = true
+	}
+
 	if !(config.print || config.write) {
-		return errors.New(`action, "-p" or "-w", must be specified`)
+		return errors.New(`action, "-p", "-P" or "-w", must be specified`)
 	}
 
 	if len(config.srcTopic) == 0 {

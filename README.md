@@ -19,6 +19,8 @@ The filter specified by `-e` is Lua code, with `msg` table defined. Every field 
 * "Value"
 * "Headers"
 
+if `-r` is not specified, then `msg.Value` contains decoded JSON message
+
 Three functions are available:
 * `pass()` - pass a message further: print or send to Kafka
 * `commit()` - if in group consumer mode, commit the offset of the current message
@@ -32,7 +34,8 @@ Cluster configuratin is taken from [kaf](https://github.com/birdayz/kaf) configu
 
 # Actions
 
-* `-p` for print the original message
+* `-p` for print message
+* `-P` pretty print JSON message (mutually exclusive with `-r`)
 * `-w` for send to Kafka
 
 You can also print from the filter code, but messages in the console may be mixed due to parallel partition processing.
@@ -44,20 +47,20 @@ You can also print from the filter code, but messages in the console may be mixe
 
 Pretty print values from topic `topic`
 ```
-ktt -p -t topic
+ktt -P -t topic
 ```
 
 Pretty print values from topic `topic` and copy to kafka cluster `cluster2`
 ```
-ktt -p -w -t topic -d cluster2
+ktt -P -w -t topic -d cluster2
 ```
 
 Find values in topic `topic` , pretty print and copy to kafka cluster `cluster2` to other topic and partition
 ```
-ktt -p -w -t topic -d cluster2 -e 'if msg.Value.field1 == "value" then msg.Topic = "newtopic" msg.Partition = 0 pass() end'
+ktt -P -w -t topic -d cluster2 -e 'if msg.Value.field1 == "value" then msg.Topic = "newtopic" msg.Partition = 0 pass() end'
 ```
 
 Skip invalid values, resend valid values, shift offset
 ```
-ktt -p -w -t topic -e 'if msg.Value.field1 != "value" then pass() end commit()'
+ktt -w -t topic -e 'if msg.Value.field1 != "value" then pass() end commit()'
 ```

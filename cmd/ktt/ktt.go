@@ -2,17 +2,23 @@ package main
 
 import (
 	"context"
-	"log"
+	"fmt"
+	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/IBM/sarama"
 )
 
+var Version = "dev"
+
 func main() {
 
+	fmt.Fprintln(os.Stderr, "ktt", Version)
+
 	if err := initConfig(); err != nil {
-		log.Fatal("initialization error: ", err)
+		fmt.Fprintln(os.Stderr, "initialization error:", err)
+		return
 	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -20,7 +26,8 @@ func main() {
 
 	kafkaSrcClient, err := sarama.NewClient(config.srcClusterBrokers, config.srcClusterConfig)
 	if err != nil {
-		log.Fatalf("error initializing client for cluster '%v': %v", config.srcClusterName, err)
+		fmt.Fprintf(os.Stderr, "error initializing client for cluster '%v': %v\n", config.srcClusterName, err)
+		return
 	}
 	defer kafkaSrcClient.Close()
 
@@ -31,16 +38,17 @@ func main() {
 		} else {
 			kafkaDstClient, err := sarama.NewClient(config.dstClusterBrokers, config.dstClusterConfig)
 			if err != nil {
-				log.Fatalf("error initializing client for cluster '%v': %v", config.dstClusterName, err)
+				fmt.Fprintf(os.Stderr, "error initializing client for cluster '%v': %v\n", config.dstClusterName, err)
+				return
 			}
 			defer kafkaDstClient.Close()
 		}
 	}
 
-	processor := NewTopicProcessor(kafkaSrcClient, kafkaDstClient, config.srcTopic, config.srcGroup)
+	processor := NewTopicProcessor(kafkaSrcClient, kafkaDstClient, config.srcTopic, config.srcGroup, &Output{})
 
 	err = processor.Run(ctx)
 	if err != nil {
-		log.Fatal("error initializing processor: ", err)
+		fmt.Fprintln(os.Stderr, "error initializing processor:", err)
 	}
 }
