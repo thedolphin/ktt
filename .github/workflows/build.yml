@@ -38,6 +38,7 @@ jobs:
         with:
           name: ktt_macos_${{ matrix.goarch }}
           path: 'dist/*'
+          retention-days: 1
 
   build-linux:
     name: Build (${{ matrix.image }})
@@ -45,14 +46,21 @@ jobs:
 
     strategy:
       matrix:
-        image:
-          - 'debian:12'
-          - 'debian:13'
-          - 'ubuntu:24.04'
-          - 'ubuntu:22.04'
-          - 'redhat/ubi10:latest'
-          - 'redhat/ubi9:latest'
-          - 'redhat/ubi8:latest'
+        include:
+          - name: debian12
+            image: 'debian:12'
+          - name: debian13
+            image: 'debian:13'
+          - name: ubuntu24
+            image: 'ubuntu:24.04'
+          - name: ubuntu22
+            image: 'ubuntu:22.04'
+          - name: rhel10
+            image: 'redhat/ubi10:latest'
+          - name: rhel9
+            image: 'redhat/ubi9:latest'
+          - name: rhel8
+            image: 'redhat/ubi8:latest'
 
     steps:
       - name: Checkout
@@ -75,8 +83,9 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v6
         with:
-          name: ktt_linux_${{ matrix.image }}
+          name: ktt_linux_${{ matrix.name }}
           path: 'dist/*'
+          retention-days: 1
 
   release:
     needs:
