@@ -40,67 +40,37 @@ jobs:
           path: 'dist/*'
           retention-days: 1
 
-  build-linux:
-    name: Build (${{ matrix.image }})
+  build-linux-amd64:
+    name: Build (${{ matrix.name }} amd64)
     runs-on: ubuntu-latest
 
     strategy:
       matrix:
         include:
-          - name: debian12
-            image: 'debian:12'
-            platform: 'amd64'
-
-          - name: debian12
-            image: 'debian:12'
-            platform: 'arm64'
-
           - name: debian13
             image: 'debian:13'
-            platform: 'amd64'
 
-          - name: debian13
-            image: 'debian:13'
-            platform: 'arm64'
+          - name: debian12
+            image: 'debian:12'
 
-          - name: ubuntu22
-            image: 'ubuntu:22.04'
-            platform: 'amd64'
+          # - name: ubuntu24
+          #   image: 'ubuntu:24.04'
 
-          - name: ubuntu22
-            image: 'ubuntu:22.04'
-            platform: 'arm64'
+          # - name: ubuntu22
+          #   image: 'ubuntu:22.04'
 
-          - name: rhel10
-            image: 'redhat/ubi10:latest'
-            platform: 'amd64'
+          # - name: rhel10
+          #   image: 'redhat/ubi10:latest'
 
-          - name: rhel10
-            image: 'redhat/ubi10:latest'
-            platform: 'arm64'
+          # - name: rhel9
+          #   image: 'redhat/ubi9:latest'
 
-          - name: rhel9
-            image: 'redhat/ubi9:latest'
-            platform: 'amd64'
-
-          - name: rhel9
-            image: 'redhat/ubi9:latest'
-            platform: 'arm64'
-
-          - name: rhel8
-            image: 'redhat/ubi8:latest'
-            platform: 'amd64'
-
-          - name: rhel8
-            image: 'redhat/ubi8:latest'
-            platform: 'arm64'
+          # - name: rhel8
+          #   image: 'redhat/ubi8:latest'
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -110,21 +80,80 @@ jobs:
         with:
           context: .
           file: ./build/package/Dockerfile.buildapp 
-          platforms: linux/${{ matrix.platform }}
+          platforms: linux/amd64
           outputs: type=local,dest=./dist
           provenance: false
+          build-args: |
+            BASE_IMAGE=${{matrix.image}}
+            APP_VERSION=${{github.ref_name}}     
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v6
         with:
-          name: ktt_linux_${{ matrix.name }}_${{ matrix.platform }}.release
+          name: ktt_linux_${{ matrix.name }}_amd64.release
           path: 'dist/*'
           retention-days: 1
+
+  # build-linux-arm64:
+  #   name: Build (${{ matrix.name }} arm64)
+  #   runs-on: ubuntu-latest
+
+  #   strategy:
+  #     matrix:
+  #       include:
+  #         - name: debian13
+  #           image: 'debian:13'
+
+  #         - name: debian12
+  #           image: 'debian:12'
+
+  #         - name: ubuntu24
+  #           image: 'ubuntu:24.04'
+
+  #         - name: ubuntu22
+  #           image: 'ubuntu:22.04'
+
+  #         - name: rhel10
+  #           image: 'redhat/ubi10:latest'
+
+  #         - name: rhel9
+  #           image: 'redhat/ubi9:latest'
+
+  #         - name: rhel8
+  #           image: 'redhat/ubi8:latest'
+
+  #   steps:
+  #     - name: Checkout
+  #       uses: actions/checkout@v6
+
+  #     - name: Set up QEMU
+  #       uses: docker/setup-qemu-action@v3
+
+  #     - name: Set up Docker Buildx
+  #       uses: docker/setup-buildx-action@v3
+
+  #     - name: Build binaries via Docker
+  #       uses: docker/build-push-action@v6
+  #       with:
+  #         context: .
+  #         file: ./build/package/Dockerfile.buildapp 
+  #         platforms: linux/arm64
+  #         outputs: type=local,dest=./dist
+  #         provenance: false
+
+  #     - name: Upload artifacts
+  #       uses: actions/upload-artifact@v6
+  #       with:
+  #         name: ktt_linux_${{ matrix.name }}_arm64.release
+  #         path: 'dist/*'
+  #         retention-days: 1
+
 
   release:
     needs:
       - build-macos
-      - build-linux
+      - build-linux-amd64
+      # - build-linux-arm64
     runs-on: ubuntu-latest
     permissions:
       contents: write
