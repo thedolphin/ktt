@@ -4,17 +4,16 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"os"
 
 	"github.com/IBM/sarama"
 	kafconfig "github.com/birdayz/kaf/pkg/config"
 )
 
 var config struct {
-	kafConfig         kafconfig.Config "github.com/birdayz/kaf/pkg/config"
-	kafConfigFile     string
-	filter            string
-	script            string
+	kafConfig     kafconfig.Config "github.com/birdayz/kaf/pkg/config"
+	kafConfigFile string
+	filter        string
+	// script            string
 	srcClusterConfig  *sarama.Config
 	srcClusterBrokers []string
 	srcClusterName    string
@@ -33,7 +32,7 @@ func initConfig() (err error) {
 
 	flag.StringVar(&config.kafConfigFile, "c", "", "kaf config file location, default $HOME/.kaf/config")
 	flag.StringVar(&config.filter, "e", "", "lua script for filtering and mangling")
-	flag.StringVar(&config.script, "f", "", "lua script file for filtering and mangling")
+	// flag.StringVar(&config.script, "f", "", "lua script file for filtering and mangling")
 	flag.StringVar(&config.srcClusterName, "s", "", "source kafka cluster name, default active cluster")
 	flag.StringVar(&config.dstClusterName, "d", "", "destination kafka cluster name, default active cluster")
 	flag.StringVar(&config.srcTopic, "t", "", "source topic name")
@@ -60,17 +59,17 @@ func initConfig() (err error) {
 		return errors.New(`topic, "-t" must be specified`)
 	}
 
-	if len(config.script) > 0 {
-		if len(config.filter) > 0 {
-			return errors.New(`"-e" and "-f" are mutually exclusive`)
-		}
-		script, err := os.ReadFile(config.script)
-		if err != nil {
-			return fmt.Errorf("error while reading script file: %w", err)
-		}
+	// if len(config.script) > 0 {
+	// 	if len(config.filter) > 0 {
+	// 		return errors.New(`"-e" and "-f" are mutually exclusive`)
+	// 	}
+	// 	script, err := os.ReadFile(config.script)
+	// 	if err != nil {
+	// 		return fmt.Errorf("error while reading script file: %w", err)
+	// 	}
 
-		config.script = string(script)
-	}
+	// 	config.script = string(script)
+	// }
 
 	config.kafConfig, err = kafconfig.ReadConfig(config.kafConfigFile)
 	if err != nil {
